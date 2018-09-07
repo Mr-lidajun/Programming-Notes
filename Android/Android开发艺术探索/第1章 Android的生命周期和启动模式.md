@@ -1,15 +1,15 @@
 #第1章 Android的生命周期和启动模式
 ## 1.1 Activity的生命周期全面分析
 ### 1.1.1 典型情况下的生命周期分析
+
 1. 当用户打开新的Activity或者切换到桌面的时候，回调如下：onPause -> onStop。
 这里有一种特殊情况，如果新Activity采用了透明主题，那么当前Activity不会回调onStop。
 2. 两个问题
 问题1：onStart 和 onResume、onPause和onStop从描述上来看差不多，对我们来说有什么实质的不同呢？
 onStart和onStop是从Activity是否可见这个角度来回调的，而onResume和onPause是从Activity是否位于前台这个角度来回调的，除了这种区别，在实际使用中没有其他明显区别。
 问题2：假设当前Activity为A，如果这时用户打开一个新ActivityB，那么B的onResume和A的onPause哪个先执行呢？
-
-![97e2255f-8536-4dc0-9e32-dfee622fff35.png](第1章 Android的生命周期和启动模式_files/97e2255f-8536-4dc0-9e32-dfee622fff35.png)
-图010101
+![Activity生命周期方法的回调顺序](https://raw.githubusercontent.com/Mr-lidajun/Programming-Notes/master/Android/Android开发艺术探索/img/010101.png)
+图1-2 Activity生命周期方法的回调顺序
 
 通过源码分析和日志打印可以发现，旧Acitivity的onPause先调用，然后新Activity才启动，这也证实了我们上面的分析过程。从另一个角度来说，Android官方文档对onPause的解释有这么一句：不能在onPause中做重量级的操作，因为必须onPause执行完成以后新Activity才能Resume，从这一点也能间接证明我们的结论。分析这个问题，我们知道onPause和onStop都不能执行耗时的操作，尤其是onPause，这也意味着，我们应当尽量在onStop中做操作，从而使得新的Activity尽快显示出来并切换到前台。
 ### 1.1.2 异常情况下的生命周期分析
