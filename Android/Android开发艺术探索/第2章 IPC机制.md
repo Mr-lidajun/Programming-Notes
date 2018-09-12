@@ -108,7 +108,81 @@ java.io.InvalidClassException: Main; local class incompatible: stream classdesc 
 图2-6 Messenger的工作原理
 
 ### 2.4.4 使用AIDL
-5.客户端的实现
+1. 服务端
+    1. 首先创建一个Service用来监听客户端的连接请求
+    2. 然后创建一个AIDL文件，将暴露给客户端的接口在这个AIDL文件中声明
+    3. 最后在Service中实现这个AIDL接口即可
+2. 客户端
+    1. 首先绑定服务端的Service
+    2. 绑定成功后，将服务端返回的Binder对象转成AIDL接口所属的类型，接着就可以调用AIDL中的方法了。
+3. AIDL接口的创建
+    1. AIDL文件支持哪些数据类型？
+        * 基本数据类型（int、long、char、boolean、double等）；
+        * String和CharSequence；
+        * List：只支持ArrayList，里面每个元素都必须能够被AIDL支持；
+        * Map：只支持HashMap，里面的每个元素都必须被AIDL支持，包括key和value；
+        * Parcelable：所有实现了Parcelable接口的对象；
+        * AIDL：所有的AILD接口本身也可以在AIDL文件中使用。
+    2. 自定义的Parcelable对象和AIDL对象必须要显式import进来。
+    3. 如果AIDL文件中用到了自定义的Parcelable对象，那么必须新建一个和它同名的AIDL文件，并在其中声明它为Parcelable类型。
+    4. AIDL中除了基本数据类型，其他类型的参数必须标上方向：int、out或者inout，in表示输入型参数，out表示输出型参数，inout表示输入输出型参数
+
+4. 远程服务端Service的实现
+
+   > AIDL中能够使用的List只有ArrayList，但是我们这里却使用了CopyOnWriteArrayList（注意它不是继承自ArrayList），为什么能够正常工作呢？
+    原因：在Binder中会按照List的规范去访问数据并最终形成一个新的ArrayList传递给客户端。
+
+    ```java
+        private Binder mBinder = new IBookManager2.Stub() {
+        @Override
+        public List<Book> getBookList() throws RemoteException {
+            Log.d(TAG, "---->Binder线程池: " + Thread.currentThread().getName());
+            SystemClock.sleep(5000);
+            return mBookList;
+        }
+    
+        @Override
+        public void addBook(Book book) throws RemoteException {
+            mBookList.add(book);
+        }
+    }
+    ```
+
+5. 客户端的实现
+    1. 假设有一种需求：用户不想时不时地查询图书列表了，太累了，于是，他去问图书馆，“当有新书时能不能把书的信息告诉我呢？”。
+        1. 首先，我们需要提供一个AIDL接口，每个用户都需要实现这个接口并且向图书馆申请新书的提醒功能。
+            
+            ```java
+            package com.ryg.chapter_2.aidl;
+            import com.ryg.chapter_2.aidl.Book;
+            interface IOnNewBookArrivedListener {
+                void onNewBookArrived(in Book newBook);
+            }
+            ```
+
+        2. 在原有接口中添加两个新方法
+            
+            ```java
+            // IBookManager.aidl
+            package com.ldj.chapter_2.aidl;
+            // 必须手动导包
+            import com.ldj.chapter_2.aidl.Book;
+            import com.ldj.chapter_2.aidl.IOnNewBookArrivedListener;
+
+            interface IBookManager2 {
+                List<Book> getBookList();
+                void addBook(in Book book);
+                void registerListener(IOnNewBookArrivedListener listener);
+                void unregisterListener(IOnNewBookArrivedListener listener);
+            }
+
+            ```
+            
+        3. 接着，修改服务端Service中IBookManager.Stub的实现，实现这两个方法
+        4. 最后，客户端需要注册IOnNewBookArrivedListener到远程服务端，当有新书时，服务端会回调客户端的IOnNewBookArrivedListener对象中的onNewBookArrived方法，但是这个方法是在客户端的Binder线程池中执行的，因此，为了便于进行UI操作，我们需要有一个Handler
+        5. 发现的问题：服务端由于无法找到要解除的listener而宣告解注册失败！-----这种解注册的处理方式在日常开发过程中时常使用到，但是放到多进程中却无法奏效，因为Binder会把客户端传递过来的对象重新转化并生成一个新的对象。虽然我们在注册和解注册过程中使用的是同一个客户端对象，但是通过Binder传递到服务端后，却会产生两个全新的对象。 _**别忘了对象是不能跨进程直接传输的，对象的跨进程传输本质上都是反序列化的过程，这就是为什么AIDL中的自定义对象都必须要实现Parcelable接口的原因。**_
+        6. 那么我们该怎么做才能实现解注册功能呢？答案是使用RemoteCallbackList
+            
 疑问1：页码P87~88
 客户端调用远程服务的方法，被调用的方法运行在服务端的Binder线程池中，同时客户端会被挂起，这个时候如果服务端方法执行比较耗时，就会导致客户端线程长时间阻塞在这里，而如果这个客户端线程是UI线程的话，就会导致客户端ANR，这当然不是我们想要看到的。因此，如果我们明确知道某个远程方法是耗时的。那么就要避免在客户端的UI线程中去访问远程方法。由于客户端的onServiceConnected和onServiceDisconnected方法都运行在UI线程中，所以也不可以在它们里面直接调用服务端的耗时方法，这点要尤其注意。另外，由于服务端的方法本身就运行在服务端的Binder线程池中，所以服务端方法本身就可以执行大量耗时操作，这个时候切记不要在服务端方法中开线程进行异步任务，除非你明确知道自己在干什么，否则不建议这么做。
 然后作者接着说：
