@@ -186,73 +186,79 @@ java.io.InvalidClassException: Main; local class incompatible: stream classdesc 
             2. 我们只要遍历服务端所有的listener，找出那个和解注册listener具有相同Binder对象的服务端listener并把它删除掉即可。
             3. 一个很有用的功能：当客户端进程终止后，它能够自动移除客户端所注册的listener。另外，RemoteCallbackList内部自动实现了线程同步的功能。
 6. 需要再次说明的几点：
-    1.客户端调用远程服务的方法，被调用的方法运行在服务端的Binder线程池中，同时客户端线程会被挂起，这个时候如果服务端方法执行比较耗时，就会导致客户端线程长时间地阻塞在这里
+    1. 客户端调用远程服务的方法，被调用的方法运行在服务端的Binder线程池中，同时客户端线程会被挂起，这个时候如果服务端方法执行比较耗时，就会导致客户端线程长时间地阻塞在这里，而如果这个客户端线程是UI线程的话，就会导致客户端ANR。
+        1. 由于客户端的onServiceConnected和OnServiceDisconnected方法都运行在UI线程中，所以不可以在里面直接调用服务端的耗时方法。
+        2. 所以服务端方法本身就可以执行大量耗时操作，这个时候切记不要在服务端方法中开线程去进行异步任务，除非你明确知道自己在干什么，否则不建议这么做。
+    2. 为了程序的健壮性，我们还需要做一件事。Binder有可能意外死亡的，这往往是由于服务端进程意外停止了，这时我们需要重新连接服务。有两种方法
+        1. 第一种方法：给Binder设置DeathRecipient监听。
+        2. 第二种方法：在onServiceDisconnected中重连远程服务。
+        3. 它们的区别在于：onServiceDisconnected在客户端的UI线程中被回调，而binderDied在客户端的Binder线程池中被回调。
+    3. 如何在AIDL中使用权限验证功能？
+        默认情况下，我们的远程服务任何人都可以连接，这应该不是我们愿意看到的。两种常用的方法：
+        * 第一种方法，我们可以在onBind中进行验证，验证不通过直接返回null，这样验证失败的客户端直接无法绑定服务。验证方式有很多种，比如permission，先在AndroidMenifest中声明所需的权限，比如：
     
+            ```xml
+            <permission
+                android:name="com.ryg.chapter_2.permission.ACCESS_BOOK_SERVICE"
+                android:protectionLevel="normal" />
+            ```
             
-疑问1：页码P87~88
+            定义了权限以后，就可以在BookManagerService的onBind方法中做权限验证了，如下所示。
+            
+            ```java
+            public IBinder onBind(Intent intent) {
+	           int check = checkCallingOrSelfPermission("com.ryg.chapter_2.
+	           permission.ACCESS_BOOK_SERVICE");
+	           if (check == PackageManager.PERMISSION_DENIED) {
+	           return null;
+	           }
+	           return mBinder;
+            }
+            ```
+            
+            如果自身内部的应用想绑定到我们的服务中，只需要在AndroidMenifest文件中采用如下方式使用permisson即可。
+            
+            ```xml
+            <uses-permission android:name="com.ryg.chapter_2.permission.ACCESS_BOOK_SERVICE"/>
+            ```
+            
+        * 第二种方法，我们可以在服务端的onTransact方法中进行权限验证，如果验证失败就直接返回false，验证方式有很多，可以采用permission验证，具体实现方式和第一种方法一样。还可以采用Uid和Pid来做验证，通过getCallingUid和getCallingPid可以拿到客户端所属应用的Uid和Pid，通过这两个参数我们可以做一些验证工作，比如验证包名。
+
+        ```java
+        public boolean onTransact(int code,Parcel data,Parcel reply,int flags)
+	throws RemoteException {
+	       int check = checkCallingOrSelfPermission("com.ryg.chapter_2.permission.ACCESS_BOOK_SERVICE");
+	       if (check == PackageManager.PERMISSION_DENIED) {
+		      return false;
+	}
+	       String packageName = null;
+	       String[] packages = getPackageManager().getPackagesForUid(getCalling-Uid());
+	       if (packages != null && packages.length > 0) {
+		      packageName = packages[0];
+	       }
+	       if (!packageName.startsWith("com.ryg")) {
+		      return false;
+	       }
+	       return super.onTransact(code,data,reply,flags);
+        }
+        ```
+        * 其他权限验证方法，比如为Service指定android:permission属性等。
+            
+#### 2.4.4.1 使用AIDL疑问1：页码P87~88
 客户端调用远程服务的方法，被调用的方法运行在服务端的Binder线程池中，同时客户端会被挂起，这个时候如果服务端方法执行比较耗时，就会导致客户端线程长时间阻塞在这里，而如果这个客户端线程是UI线程的话，就会导致客户端ANR，这当然不是我们想要看到的。因此，如果我们明确知道某个远程方法是耗时的。那么就要避免在客户端的UI线程中去访问远程方法。由于客户端的onServiceConnected和onServiceDisconnected方法都运行在UI线程中，所以也不可以在它们里面直接调用服务端的耗时方法，这点要尤其注意。另外，由于服务端的方法本身就运行在服务端的Binder线程池中，所以服务端方法本身就可以执行大量耗时操作，这个时候切记不要在服务端方法中开线程进行异步任务，除非你明确知道自己在干什么，否则不建议这么做。
 然后作者接着说：
 同理，当远程服务端需要调用客户端的listener中的方法时，被调用的方法和运行在Binder线程池中，只不过是客户端的线程池。所以，我们同样不可以在服务端中调用客户端的耗时方法。比如针对BookManagerService的onNewBookArrived方法，如下所示。它在内部调用了客户端的IOnNewBookArrivedListener中的onNewBookArrived方法，如果客户端的这个onNewBookArrived方法比较耗时的话，那么请确保BookManagerService中的onNewBookArrived运行在非UI线程中，否则将导致服务端无法响应。
 另外，由于客户端的IOnNewBookArrivedListener中的onNewBookArrived方法运行在客户端的Binder线程池中，所以不能再它里面去访问UI相关的内容，如果要访问UI，请使用Handler切换到UI线程....
 这里有疑问，前面说服务端的方法本身就运行在服务端的Binder线程池中，所以服务端本身就可以执行大量耗时操作。后面说同理，....我们同样不可以在服务端中调用客户端的耗时方法？这里需要重读一下。
-AIDL 权限验证（P90）
-方法一：在onBind中进行验证，验证不通过就直接返回null，这样验证失败的客户端直接无法绑定服务，至于验证方式可以有很多种，比如使用permission验证。使用这种验证方式，我们要先在AndroidManifest中声明所需的权限，比如：
 
-```xml
-<permission android:name="com.ryg.chapter_2.permission.ACCESS_BOOK_SERVICE"
-android:protectionLevel="normal" />
-```
+### 2.4.5 使用ContentProvider
+1. 除了onCreate由系统回调并运行在主线程里，其他五个方法均由外界回调并运行在Binder线程池中。
+2. android:authorities是Content-Provider的唯一标识
+3. 通过ContentResolver的notifyChange方法来通知外界当前数据已经发生改变。通过registerContentObserver方法来注册观察者，通过unregisterContentObserver方法来解除观察者。
+4. 如果通过多个SQLiteDatabase对象来操作数据库就无法保证线程同步，因为SQLiteDatabase对象之间无法进行线程同步。如果ContentProvider的底层数据集是一块内存的话，比如List，在这种情况下同List的遍历、插入、删除操作就需要进行线程同步，否则就会引起并发错误。
+5. ContentProvider除了支持对数据源的增删改查这四个操作，还支持自定义调用，这个过程是通过ContentResolve的Call方法和ContentProvider的Call方法来完成的。
 
-定义权限以后，就可以在BookManagerService的onBind方法中做权限验证了，如下所示。
-
-```Java,default
-@Override 
-public IBinder onBind(Intent intent) {
-    int check =
-            checkCallingOrSelfPermission("com.ryg.chapter_2.permission.ACCESS_BOOK_SERVICE");
-    Log.d(TAG, "onbind check=" + check);
-    if (check == PackageManager.PERMISSION_DENIED) {
-        return null;
-    }
-    return mBinder;
-}
-```
-
-一个应用来绑定我们的服务时，会验证这个应用的权限，如果它没有使用这个权限，onBind方法就会直接返回null，最终结果是这个应用无法绑定到我们的服务，这样就到达了权限验证的效果，这种方法同样适用于Messenger中，读者可以自行扩展。
-如果我们自己内部的应用想绑定到我们的服务中，只需要在它的AndroidManifest文件中采用如下方式使用permission即可。
-
-```xml
-<uses-permission android:name="com.ryg.chapter_2.permission.ACCESS_BOOK_SERVICE" />
-```
-
-方法二：在服务端的onTransact方法中进行权限验证，如果验证失败就直接返回false，这样服务端就不会终止执行AIDL中的方法从而达到保护服务端的效果。验证方式也有很多种，可以采用permission验证，具体实现方式和第一种方法一样，还可以采用Uid和Pid来做验证，通过getCallingUid和getCallingPid可以拿到客户端所属应用的Uid和Pid，通过这两个参数我们可以做一些验证工作，比如验证包名。略...
-
-```Java
-public boolean onTransact(int code, Parcel data, Parcel reply, int flags)
-        throws RemoteException {
-    int check =
-            checkCallingOrSelfPermission("com.ryg.chapter_2.permission.ACCESS_BOOK_SERVICE");
-    Log.d(TAG, "check=" + check);
-    if (check == PackageManager.PERMISSION_DENIED) {
-        return false;
-    }
-    String packageName = null;
-    String[] packages = getPackageManager().getPackagesForUid(getCallingUid());
-    if (packages != null && packages.length > 0) {
-        packageName = packages[0];
-    }
-    Log.d(TAG, "onTransact: " + packageName);
-    if (!packageName.startsWith("com.ryg")) {
-        return false;
-    }
-    return super.onTransact(code, data, reply, flags);
-}
-```
-其他方法：比如为Service指定android:permission属性等。
-
-
-
-
+### 2.4.6 使用Socket
 
 
 
