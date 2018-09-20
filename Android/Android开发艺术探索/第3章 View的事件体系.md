@@ -1,21 +1,51 @@
 # 第3章 View的事件体系
+> 很多情况下我们的应用都需要支持滑动操作，当处于不同层级的View都可以响应用户的滑动操作时，就会带来一个问题，那就是滑动冲突。如何解决滑动冲突呢？它需要我们对View的事件分发机制有一定的了解。
+
 ## 3.1 View基础知识
+> 主要内容：View的位置参数、MotionEvent和TouchSlop对象、VelocityTracker、GestureDetector和Scroller对象
+
 ### 3.1.1 什么是view
+View是Android中所有控件的基类，View是一种界面层的控件的一种抽象，它代表了一个控件。ViweGroup，翻译为控件组，言外之意是ViewGroup内部包含了许多个控件，即一组View。ViewGroup也继承了View，这就意味着View本身就可以是单个控件也可以是由多个控件组成的一组控件，通过这种关系就形成了View树的结构，这和Web前端中的DOM树的概念是相似的。
+![](img/3-1.png)
+图3-1 TestButton的层次结构
 ### 3.1.2 View的位置参数
-View的位置主要由它的四个顶点来决定，分别对应于View的四个属性：top、left、right、bottom，其中top是左上角纵坐标，left是左上角横坐标，right是右下角横坐标，bottom是右下角纵坐标。需要注意的是，这些坐标都是相对于View的父容器来说的，因此它是一种相对坐标。在Android中，x轴和y轴的正方向分别为右和下，这点不难理解，不仅仅是Android，大部分显示系统都是按照这个标准来定义坐标系的。
-从Android3.0开始，View增加了额外的几个参数：x、y、translationX和translationY，其中x和y是View左上角的坐标，而translationX和translationY是View左上角相当于父容器的偏移量。这几个参数也是相对于父容器的坐标，并且translationX和translationY的默认值是0，和View的四个基本的位置参数一样，View也为它们提供了get/set方法，这几个参数的换算关系如下所示。
+> _View的位置主要由它的四个顶点来决定，分别对应于View的四个属性：top、left、right、bottom_，其中top是左上角纵坐标，left是左上角横坐标，right是右下角横坐标，bottom是右下角纵坐标。需要注意的是， _这些坐标都是相对于View的父容器来说的，因此它是一种相对坐标。在Android中，x轴和y轴的正方向分别为右和下，_这点不难理解， _不仅仅是Android，大部分显示系统都是按照这个标准来定义坐标系的。_
+
+![](img/3-2.png)
+图3-2 View的位置坐标和父容器的关系
+
+* 根据图3-2，我们很容易得出View的宽高和坐标的关系：
 
 ```java
-x = left + translationX
-y = left + translationY
+width = right - left
+height = bottom - top
 ```
 
-需要注意的是，View在平移的过程中，top和left表示的是原始左上角的位置信息，其值并不会发生改变，此时发生改变的是x、y、translationX和translationY这个四个参数。
+* 从Android3.0开始，View增加了额外的几个参数：x、y、translationX和translationY，其中**x和y是View左上角的坐标，而translationX和translationY是View左上角相当于父容器的偏移量。这几个参数也是相对于父容器的坐标**，并且translationX和translationY的默认值是0，和View的四个基本的位置参数一样，View也为它们提供了get/set方法，**这几个参数的换算关系如下所示**。
+
+    ```java
+    x = left + translationX
+    y = left + translationY
+    ```
+
+* 需要注意的是，**View在平移的过程中，top和left表示的是原始左上角的位置信息，其值并不会发生改变**，此时发生改变的是x、y、translationX和translationY这个四个参数。
+
 ### 3.1.3 MotionEvent和TouchSlop
-1. MotionEvent
-通过MotionEvent对象我们可以得到点击事件发生的x和y坐标。为止，系统提供了两组方法：getX/getY和getRawX/getRawY。它们的区别其实很简单，getX/getY返回的是相对于当前View左上角的 x 和 y 坐标，而getRawX/getRawY返回的是相对于手机屏幕左上角的 x 和 y 坐标。
-2. TouchSlop
-TouchSlop是系统所能识别出的被认为是滑动的最小距离。这是一个常量，和设备有关，在不同设备上这个值可能是不同的，通过如下方式即可获取这个常量：ViewConfiguration.get(getContext()).getScaledTouchSlop()。可以在源码中找到这个常量的定义，在frameworks/base/core/res/res/values/config.xml文件中。
+1. MotionEvent    
+* 1-1 一次手指触摸屏幕的行为会触发一系列点击事件， 考虑如下几种情况：
+    * 点击屏幕后离开松开，事件序列为DOWN -> UP；
+    * 点击屏幕滑动一会再松开，事件序列为DOWN -> MOVE  ->...> MOVE -> UP
+* 通过MotionEvent对象我们可以得到点击事件发生的x和y坐标。为止，系统提供了两组方法：getX/getY和getRawX/getRawY。它们的区别其实很简单，**getX/getY返回的是相对于当前View左上角的 x 和 y 坐标，而getRawX/getRawY返回的是相对于手机屏幕左上角的 x 和 y 坐标。**
+2. TouchSlop    
+TouchSlop是系统所能识别出的被认为是滑动的最小距离。这是一个常量，和设备有关，在不同设备上这个值可能是不同的，通过如下方式即可获取这个常量：
+
+```java    
+ViewConfiguration.get(getContext()).getScaledTouchSlop()。
+```
+
+* 这个常量有什么意义呢？**当我们在处理滑动时，可以利用这个常量来做一些过滤**，比如当两次滑动事件的滑动距离小于这个值，我们就可以认为未达到滑动距离的临界值，因此就可以认为它们不是滑动，这样可以有更好的用户体验。
+
+* 可以在源码中找到这个常量的定义，在frameworks/base/core/res/res/values/config.xml文件中。
 
 ```xml
 <!-- Base"touch slop" value used by ViewConfiguration as a movement threshold where scrolling should begin. -->
@@ -23,12 +53,78 @@ TouchSlop是系统所能识别出的被认为是滑动的最小距离。这是�
 ```
 
 ### 3.1.4 VelocityTracker、GestureDetector和Scroller
-1. VelocityTracker
+1. VelocityTracker    
     速度追踪，用于追踪手指在滑动过程中的速速，包括水平和竖直方法的速度。
-2. GestureDetector
+    * 首先，要在View的onTouchEvent方法中添加要追踪的事件
+    
+    ```java
+    VelocityTracker velocityTracker = VelocityTracker.obtarn();
+    velocityTracker.addMovement(event);
+    ```
+    
+    * 接着，获得当前速度
+    
+    ```java
+    velocityTracker.computeCurrentVelocity(1000);
+    int xVelocity = (int) velocityTracker.getXVelocity();
+    int yVelocity = (int) velocityTracker.getYVelocity();
+    ```
+    
+    * 这里需要注意的是：
+        * 1-1 必须先计算速度再获取速度，即必须先调用computeCurrentVelocity方法才可以调用getX/YVelocity方法
+        * 1-2 这个速度是可以为负的，它指的是一段时间内手指所滑过的像素数，当手指逆着Android坐标滑动，结果即为负数了。
+        * 1-3 computeCurrentVelocity方法的参数是一个时间单元，单位为ms，如果参数为100，手指在100ms内划过了10像素，那水平速度即为10。参数为1000，手指在1000ms内划过了100个像素，那水平速度即为100。其实这两个速度是相等的（假设滑动过程都是均速），但结果却不同，因为这个速度是相对于这个时间单元参数的，这里需要理解一下。
+    * 最后，当不需要它的时候，需要回收内存
+    
+        ```java
+        velocityTracker.clear();
+        velocityTracker.recycle();
+        ```
+    
+2. GestureDetector    
     手势检测，用于辅助检测用户的单击、滑动、长按、双击等行为。
-3. Scroller
-    弹性滑动对象，用于实现View的弹性滑动。我们知道，当使用View的scrollTo/scrollBy方法来进行滑动时，其过程是瞬间完成的，这个没有过渡效果的滑动用户体验不好。这个时候就可以使用Scroller来实现有过渡效果的滑动，其过程不是瞬间完成的，而是在一定的时间间隔内完成的。Scroller本身无法让View弹性滑动，它需要和View的computeScroll方法配合使用才能共同完成这个功能。那么如何使用Scroller呢？它的典型代码是固定的，代码略了~，至于它为什么能实现弹性滑动，这个在3.2节中会进行详细介绍。
+    * 1-1 首先，需要创建一个GestureDetector对象并实现OnGestureListener接口，根据需要我们还可以实现OnDoubleTapListener从而能够监听双击行为：
+    
+    ```java
+    GestureDetector  mGestureDetector = new GestureDetector(this);
+    //解决长按屏幕后无法拖动的现象
+    mGestureDetector.setIsLongpressEnabled(false);
+    ```
+    
+    * 1-2 接着，接管目标View的OnTouchEvent方法
+    
+    ```java
+    boolean consume = mGestureDetector.onTouchEvent(event);
+    return consume;
+    ```
+    
+    表3-1 OnGestureListener和OnDoubleTapListener中的方法
+    ![](img/T3-1.jpg)
+    
+    * 建议：如果只是监听滑动相关的，建议自己在onTouchEvent中实现，如果要监听双击这种行为的话，那么就使用GestureDetector
+    
+3. Scroller    
+    **弹性滑动对象，用于实现View的弹性滑动。**我们知道，当使用View的scrollTo/scrollBy方法来进行滑动时，其过程是瞬间完成的，这个没有过渡效果的滑动用户体验不好。这个时候就可以使用Scroller来实现有过渡效果的滑动，其过程不是瞬间完成的，而是在一定的时间间隔内完成的。Scroller本身无法让View弹性滑动，它需要和View的computeScroll方法配合使用才能共同完成这个功能。那么如何使用Scroller呢？它的典型代码是固定的，代码略了~，至于它为什么能实现弹性滑动，这个在3.2节中会进行详细介绍。
+
+```java
+Scroller scroller = new Scroller(mContext);
+// 缓慢滚动到指定位置
+private void smoothScrollTo(int destX, int destY) {
+  int scrollX = getScrollX();
+  int delta = destX - scrollX;
+  // 1000ms内滑向destX，效果就是慢慢滑动
+  mScroller.startScroll(scrollX, 0, delta, 0, 1000);
+  invalidate();
+}
+
+@Override public void computeScroll() {
+  if (mScroller.computeScrollOffset()) {
+    scrollTo(mScroller.getCurrX(), mScroller.getCurrY());
+    postInvalidate();
+  }
+}
+```
+
 ## 3.2 View的滑动
 在Android设备上，滑动几乎是应用的标配，不管是下拉刷新还是SlidingMenu，它们的基础都是滑动。从另外一方面来说，Android手机由于屏幕比较小，为了给用户呈现更多的内容，就需要使用滑动来隐藏和显示一些内容。通过三种方式可以实现View的滑动：第一种是通过View本身提供的scrollTo/scrollBy方法来实现滑动；第二种是通过动画给View施加平移效果来实现滑动；第三种是通过改变View的LayoutParams使得View重新布局从而实现滑动。
 ### 3.2.1 使用scrollTo/scrollBy

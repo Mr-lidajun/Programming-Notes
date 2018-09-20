@@ -273,8 +273,134 @@ java.io.InvalidClassException: Main; local class incompatible: stream classdesc 
 * 首先回顾一下AIDL大致流程：首先创建一个Service和一个AIDL接口，接着创建一个类继承自AIDL接口中的Stub类并实现Stub中的抽象方法，在Service的onBind方法中返回这个类的对象，然后客户端就可以绑定服务端Service，建立连接后就可以访问远程服务端的方法了。
 * Binder连接池原理：将所有的AIDL放在同一个Service中去管理。整个工作机制是这样的：每个业务模块创建自己的AIDL接口并实现此接口，这个时候不同业务模块之间是不能有耦合的，所有实现细节我们要单独开来，然后向服务端提供自己的唯一标识和其对应的Binder对象；对于服务端来说，只需要一个Service就可以了，服务端提供一个queryBinder接口，这个接口能够根据业务模块的特征来返回相应的Binder对象给它们，不同的业务模块拿到所需的Binder对象后就可以进行远程方法调用了。
 * Binder连接池的主要作用就是将每个业务模块的Binder请求统一转发到远程Service中去执行，从而避免了重复创建Service的过程，工作原理如图2-10所示。
+    ![Messenger的工作原理](https://raw.githubusercontent.com/Mr-lidajun/Programming-Notes/master/Android/Android开发艺术探索/img/2-10.png)
+    图2-6 Binder连接池的工作原理
+* 服务端和Binde连接池的工作：
+    * 首先，为Binder连接池创建AIDL接口IBinderPool.aidl，代码如下所示。
+        
+        ```java
+        package com.ldj.chapter_2.aidl;
+        // Declare any non-default types here with import statements
+
+        interface IBinderPool {
+        /**
+        * @param binderCode, the unique token of specific Binder<br/>
+        * @return specific Binder who's token is binderCode.
+        */
+        IBinder queryBinder(int binderCode);
+}
+        ```
+
+    * 接着，为Binder连接池创建远程Service并实现IBinderPool，具体实现，根据不同模块的标识即binderCode返回不同的Binder对象，通过这个Binder对象所执行的操作全部发生在远程服务端。
     
+        ```java
+        public static class BinderPoolImpl extends IBinderPool.Stub {
+        public BinderPoolImpl() {
+            super();
+        }
+    
+        @Override public IBinder queryBinder(int binderCode) throws RemoteException {
+            IBinder binder = null;
+            switch (binderCode) {
+                case BINDER_SECURITY_CENTER:
+                    binder = new SecurityCenterImpl();
+                    break;
+                case BINDER_COMPUTE:
+                    binder = new ComputeImpl();
+                    break;
+                default:
+                    break;
+                }
+                return binder;
+            }
+        }
+        ```
+    
+    * 远程Service的实现就比较简单了。
+        
+        ```java
+        public class BinderPoolService extends Service {
+            private static final String TAG = "BinderPoolService";
+        
+            private Binder mBinderPool = new BinderPool.BinderPoolImpl();
+        
+            @Override
+            public void onCreate() {
+                super.onCreate();
+            }
+        
+            @Nullable @Override public IBinder onBind(Intent intent) {
+                return mBinderPool;
+            }
+        
+            @Override
+            public void onDestroy() {
+                super.onDestroy();
+            }
+        }
+        ```
+    
+    * 剩下Binder连接池的具体实现，在它的内部首先它要去绑定远程服务，绑定成功后，客户端就可以通过它的queryBinder方法去获取各自对应的Binder，拿到所需的Binder以后，不同业务模块就可以进行各自的操作了，具体代码省略，见书P116
+    * 验证效果，在线程中执行如下操作：
+        
+        ```java
+        public class BinderPoolActivity extends Activity {
+            private static final String TAG = "BinderPoolActivity";
+        
+            private ISecurityCenter mSecurityCenter;
+            private ICompute mCompute;
+        
+            @Override protected void onCreate(@Nullable Bundle savedInstanceState) {
+                super.onCreate(savedInstanceState);
+                setContentView(R.layout.activity_binder_pool);
+                new Thread() {
+                    @Override public void run() {
+                        doWork();
+                    }
+                }.start();
+            }
+        
+            private void doWork() {
+                BinderPool binderPool = BinderPool.getInstance(this);
+                IBinder securityBinder = binderPool.queryBinder(BinderPool.BINDER_SECURITY_CENTER);
+                mSecurityCenter = SecurityCenterImpl.asInterface(securityBinder);
+                Log.d(TAG, "visit ISecurityCenter");
+                String msg = "helloworld-安卓";
+                System.out.println("content:" + msg);
+                try {
+                    String password = mSecurityCenter.encrypt(msg);
+                    System.out.println("encrypt:" + password);
+                    System.out.println("decrypt:" + mSecurityCenter.decrypt(password));
+                } catch (RemoteException e) {
+                    e.printStackTrace();
+                }
+        
+                Log.d(TAG, "visit ICompute");
+                IBinder computeBinder = binderPool.queryBinder(BinderPool.BINDER_COMPUTE);
+                mCompute = ComputeImpl.asInterface(computeBinder);
+                try {
+                    System.out.println("3+5=" + mCompute.add(3, 5));
+                } catch (RemoteException e) {
+                    e.printStackTrace();
+                }
+            }
+        }
+        ```
+    * 为什么要在线程中去执行呢？这是因为在Binder连接池的实现中，我们通过CountDownLatch将bindService这一异步操作转换成了同步操作，这意味着它有可能是耗时的，然后就是Binder方法的调用过程也可能是耗时的，因此不建议放在主线程去执行。
+    * Binder是一个单例实现，在同一个进程中只会初始化一次，为了优化程序的体验，初始化可以放在Application中提前进行。虽然这不能保证当我们调用BinderPool时它一定是初始化好的，但是在大多数情况下，这种初始化工作（绑定远程服务）的时间开销（如果BinderPool没有提前初始化完成的话）是可以接受的。
+    * 另外，BinderPool中有断线重连的机制，当远程服务意外终止时，BinderPool会重新创建连接，这个时候如果业务模块中的Binder调用出现了异常，也需要手动去重新获取最新的Binder对象，这个是需要注意的。
+
+## 2.6 选用合适的IPC方式
+表2-2 IPC方式的优缺点和适用场景
 
 
+| 名称 | 优点 | 缺点 | 适用场景 |
+| --- | --- | --- | --- |
+| Bundle | 简单易用 | 只能传输Bundle支持的数据类型 | 四大组件间的进程间通信 |
+| 文件共享 | 简单易用 | 不适合高并发场景，并且无法做到进程间的即时通信 | 无并发访问情形，交换简单的数据实时性不高的场景 |
+| AIDL | 功能强大，支持一对多并发通信，支持实时通信 | 使用稍复杂，需要处理好线程同步 | 一对多通信且有RPC需求 |
+| Messenger | 功能一般，支持一对多串行通信，支持实时通信 | 不能很好处理高并发情形，不支持RPC，数据通过Message进行传输，因此只能传输Bundle支持的数据类型 | 低并发的一对多即时通信，无RPC需求，或者无须要返回结果的RPC需要 |
+| ContentProvider | 在数据源访问方面功能强大，支持一对多并发数据共享，可通过Call方法扩展其他操作 | 可以理解为受约束的AIDL，主要提供数据源的CRUD操作 | 一对多的进程间的数据共享 |
+| Socket | 功能强大，可以通过网络传输字节流，支持一对多并发实时通信 | 实现细节稍微有点繁琐，不支持直接的RPC | 网络数据交换  |
 
 
