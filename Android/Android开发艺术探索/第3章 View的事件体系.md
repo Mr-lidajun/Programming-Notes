@@ -6,12 +6,12 @@
 
 ### 3.1.1 什么是view
 View是Android中所有控件的基类，View是一种界面层的控件的一种抽象，它代表了一个控件。ViweGroup，翻译为控件组，言外之意是ViewGroup内部包含了许多个控件，即一组View。ViewGroup也继承了View，这就意味着View本身就可以是单个控件也可以是由多个控件组成的一组控件，通过这种关系就形成了View树的结构，这和Web前端中的DOM树的概念是相似的。
-![](img/3-1.png)
+![](https://raw.githubusercontent.com/Mr-lidajun/Programming-Notes/master/Android/Android开发艺术探索/img/3-1.png)
 图3-1 TestButton的层次结构
 ### 3.1.2 View的位置参数
 > _View的位置主要由它的四个顶点来决定，分别对应于View的四个属性：top、left、right、bottom_，其中top是左上角纵坐标，left是左上角横坐标，right是右下角横坐标，bottom是右下角纵坐标。需要注意的是， _这些坐标都是相对于View的父容器来说的，因此它是一种相对坐标。在Android中，x轴和y轴的正方向分别为右和下，_这点不难理解， _不仅仅是Android，大部分显示系统都是按照这个标准来定义坐标系的。_
 
-![](img/3-2.png)
+![](https://raw.githubusercontent.com/Mr-lidajun/Programming-Notes/master/Android/Android开发艺术探索/img/3-2.png)
 图3-2 View的位置坐标和父容器的关系
 
 * 根据图3-2，我们很容易得出View的宽高和坐标的关系：
@@ -99,8 +99,7 @@ ViewConfiguration.get(getContext()).getScaledTouchSlop()。
     ```
     
     表3-1 OnGestureListener和OnDoubleTapListener中的方法
-    ![](img/T3-1.jpg)
-    
+    ![](https://raw.githubusercontent.com/Mr-lidajun/Programming-Notes/master/Android/Android开发艺术探索/img/T3-1.jpg)
     * 建议：如果只是监听滑动相关的，建议自己在onTouchEvent中实现，如果要监听双击这种行为的话，那么就使用GestureDetector
     
 3. Scroller    
