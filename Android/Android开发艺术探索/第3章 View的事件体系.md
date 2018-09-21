@@ -53,7 +53,7 @@ ViewConfiguration.get(getContext()).getScaledTouchSlop()。
 ```
 
 ### 3.1.4 VelocityTracker、GestureDetector和Scroller
-1. VelocityTracker    
+1. VelocityTracker
     速度追踪，用于追踪手指在滑动过程中的速速，包括水平和竖直方法的速度。
     * 首先，要在View的onTouchEvent方法中添加要追踪的事件
     
@@ -81,7 +81,7 @@ ViewConfiguration.get(getContext()).getScaledTouchSlop()。
         velocityTracker.recycle();
         ```
     
-2. GestureDetector    
+2. GestureDetector
     手势检测，用于辅助检测用户的单击、滑动、长按、双击等行为。
     * 1-1 首先，需要创建一个GestureDetector对象并实现OnGestureListener接口，根据需要我们还可以实现OnDoubleTapListener从而能够监听双击行为：
     
@@ -102,7 +102,7 @@ ViewConfiguration.get(getContext()).getScaledTouchSlop()。
     ![](https://raw.githubusercontent.com/Mr-lidajun/Programming-Notes/master/Android/Android开发艺术探索/img/T3-1.jpg)
     * 建议：如果只是监听滑动相关的，建议自己在onTouchEvent中实现，如果要监听双击这种行为的话，那么就使用GestureDetector
     
-3. Scroller    
+3. Scroller 
     **弹性滑动对象，用于实现View的弹性滑动。**我们知道，当使用View的scrollTo/scrollBy方法来进行滑动时，其过程是瞬间完成的，这个没有过渡效果的滑动用户体验不好。这个时候就可以使用Scroller来实现有过渡效果的滑动，其过程不是瞬间完成的，而是在一定的时间间隔内完成的。Scroller本身无法让View弹性滑动，它需要和View的computeScroll方法配合使用才能共同完成这个功能。那么如何使用Scroller呢？它的典型代码是固定的，代码略了~，至于它为什么能实现弹性滑动，这个在3.2节中会进行详细介绍。
 
 ```java
@@ -125,7 +125,10 @@ private void smoothScrollTo(int destX, int destY) {
 ```
 
 ## 3.2 View的滑动
-在Android设备上，滑动几乎是应用的标配，不管是下拉刷新还是SlidingMenu，它们的基础都是滑动。从另外一方面来说，Android手机由于屏幕比较小，为了给用户呈现更多的内容，就需要使用滑动来隐藏和显示一些内容。通过三种方式可以实现View的滑动：第一种是通过View本身提供的scrollTo/scrollBy方法来实现滑动；第二种是通过动画给View施加平移效果来实现滑动；第三种是通过改变View的LayoutParams使得View重新布局从而实现滑动。
+掌握滑动的方法是实现绚丽的自定义控件的基础。通过三种方式可以实现View的滑动：
+* 第一种是通过View本身提供的scrollTo/scrollBy方法来实现滑动；
+* 第二种是通过动画给View施加平移效果来实现滑动；
+* 第三种是通过改变View的LayoutParams使得View重新布局从而实现滑动。
 ### 3.2.1 使用scrollTo/scrollBy
     为了实现View的滑动，View提供了专门的方法来实现这个功能，那就是scrollTo和scrollBy。
 参考博文：Android Scroller完全解析，关于Scroller你所需知道的一切
@@ -169,10 +172,14 @@ public void scrollBy(int x, int y) {
 }
 ```
 
-从源代码可以看出，scrollBy实际上也是调用了scrollTo方法，它实现了基于当前位置的相对滑动，而scrollTo则实现了基于所传递参数的绝对滑动，这个不难理解。但是我们要明白滑动过程中View内部的两个属性mScrollX和mScrollY的改变规则，这两个属性可以通过getScrollX和getScrollY方法分别得到。这里先简要概括一下：在滑动过程中，mScrollX的值总是等于View左边缘和View内容左边缘在水平方向的距离，而mScrollY的值总是等于View上边缘和View内容上边缘在竖直方向的距离。View边缘是指View的位置，由四个顶点组成，而View内容边缘是指View中的内容的边缘，scrollTo和scrollBy只能改变View内容的位置而不能改变View在布局中的位置。mScrollX和mScrollY的单位为像素，并且当View左边缘在View内容左边缘的右边时，mScrollX为正值，反之为负值；当View上边缘在View内容上边缘的下边时，mScrollY为正值，反之为负值。换句话说，如果从左向右滑动，那么mScrollX为负值，反之为正值；如果从上往下滑动，那么mScrollY为负值，反之为正值。
+从源代码可以看出，scrollBy实际上也是调用了scrollTo方法，它实现了基于当前位置的相对滑动，而scrollTo则实现了基于所传递参数的绝对滑动，这个不难理解。但是我们要明白滑动过程中View内部的两个属性mScrollX和mScrollY的改变规则，这两个属性可以通过getScrollX和getScrollY方法分别得到。这里先简要概括一下：**在滑动过程中，mScrollX的值总是等于View左边缘和View内容左边缘在水平方向的距离，而mScrollY的值总是等于View上边缘和View内容上边缘在竖直方向的距离。**View边缘是指View的位置，由四个顶点组成，而View内容边缘是指View中的内容的边缘，**scrollTo和scrollBy只能改变View内容的位置而不能改变View在布局中的位置**。mScrollX和mScrollY的单位为像素，并且当View左边缘在View内容左边缘的右边时，mScrollX为正值，反之为负值；当View上边缘在View内容上边缘的下边时，mScrollY为正值，反之为负值。换句话说，**如果从左向右滑动，那么mScrollX为负值，反之为正值；如果从上往下滑动，那么mScrollY为负值，反之为正值。**
     注意：使用scrollTo和scrollBy来实现View的滑动，只能将View的内容进行移到，并不能将View本身进行移到，也就是说，不管怎么滑动，也不可能将当前View滑动到附近View所在的区域，这个需要仔细体会一下。
+![](https://raw.githubusercontent.com/Mr-lidajun/Programming-Notes/master/Android/Android开发艺术探索/img/3-3.jpg)
+图3-3 mScrollX和mScrollY的变换规律示意
 ### 3.2.2 使用动画
-通过动画我们能够让一个View进行平移，而平移就是一种滑动。使用动画来移到View，主要是操作View的translationX和translationY属性，既可以采用传统的View动画，也可以采用属性动画。这里需要注意传统的View动画的一个弊端：传统的View动画并不能真正改变View的位置，这位带来一个很严重的问题。比如我们通过View动画将一个Button向右移到100px，并且这个View设置的有单击事件，然后你会惊奇地发现，单击新位置无法触发onClick事件，而单击原始位置仍然可以触发onClick事件，尽管Button已经不在原始位置了。这个问题带来的影响是致命的，但是它却又是可以理解的，因为不管Button怎么做变换，但是它的位置信息（四个顶点和宽/高）并不会随着动画而改变，因此在系统眼里，这个Button并没有发生任何改变，它的真身仍然在原始位置。在这种情况下，单击新位置当然不会触发onClick事件了，因为Button的真身并没有发生改变，在新位置上只是View的影像而已。
+通过动画我们能够让一个View进行平移，而平移就是一种滑动。使用动画来移到View，主要是操作View的translationX和translationY属性，既可以采用传统的View动画，也可以采用属性动画。**这里需要注意传统的View动画的一个弊端**：传统的View动画并不能真正改变View的位置，这位带来一个很严重的问题。比如我们通过View动画将一个Button向右移到100px，并且这个View设置的有单击事件，然后你会惊奇地发现，单击新位置无法触发onClick事件，而单击原始位置仍然可以触发onClick事件，尽管Button已经不在原始位置了。这个问题带来的影响是致命的，但是它却又是可以理解的，因为**不管Button怎么做变换，但是它的位置信息（四个顶点和宽/高）并不会随着动画而改变，因此在系统眼里，这个Button并没有发生任何改变，它的真身仍然在原始位置。在这种情况下，单击新位置当然不会触发onClick事件了，因为Button的真身并没有发生改变，在新位置上只是View的影像而已**。
+* 那么这种问题难道就无法解决了吗？
+    解决方案：我们可以在新位置预先创建一个和目标Button一模一样的Button，它们不但外观一样连OnClick事件也一样。当目标Button完成平移动画后，就把目标Button隐藏，同时把预先创建的Button显示出来。
 ### 3.2.3 改变布局参数
 第三种实现View滑动的方法，那就是改变布局参数，即改变LayoutParams。比如我们想把一个Button向右平移100px，我们只需要将这个Button的LayoutParams里的marginLeft参数的值增加100px即可，是不是很简单呢？还有一种情形，为了达到移到Button的目的，我们可以在Button的左边放置一个空的View，这个空View的默认宽度为0，当我们需要向右移到Button时，只需要重置空View的宽度即可，当空View的宽度增大时（假设Button的父容器是水平方向的LinearLayout），Button就自动被挤向右边，即实现了向右平移的效果。如何重新设置一个View的LayoutParams呢？很简单，如下所示。
 
