@@ -296,6 +296,7 @@ Activity的启动过程很复杂，最终会由ActivityThread中的performLaunch
 
 ActivityThread的performLaunchActivity -> 通过类加载器创建Activity的实例对象 -> 调用其attach方法关联运行过程中所依赖的上下文变量 -> Activity所属Window对象 -> PolicyManager的makeNewWindow方法
 由此可以发现，Window的具体实现的确是PhoneWindow
+/frameworks/base/policy/src/com/android/internal/policy/impl/Policy.java
 
 ```java
 public Window makeNewWindow(Context context) {
