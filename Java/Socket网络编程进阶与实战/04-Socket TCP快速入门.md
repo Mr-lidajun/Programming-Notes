@@ -73,4 +73,7 @@
 * 重发
 ![](https://raw.githubusercontent.com/Mr-lidajun/Programming-Notes/master/Java/Socket网络编程进阶与实战/img/040405.gif)
 
- 
+
+### 4.4.3 TCP可靠性示意图（二）
+* 服务器端一对多的连接可靠性示意图
+![](https://raw.githubusercontent.com/Mr-lidajun/Programming-Notes/master/Java/Socket网络编程进阶与实战/img/040406.gif)
