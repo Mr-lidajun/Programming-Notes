@@ -1,0 +1,55 @@
+# 第6章 简易聊天室案例
+## 6.1 聊天室数据传输设计
+> **必要条件**：客户端、服务器
+> **必要约束**：数据传输协议
+> **原理**：服务器监听消息来源、客户端链接服务器并发送消息到服务器。
+
+### 6.1.1 客户端、服务器数据交互
+![](https://raw.githubusercontent.com/Mr-lidajun/Programming-Notes/master/Java/Socket网络编程进阶与实战/img/060101.png)
+
+### 6.1.2 数据传输协议
+![](https://raw.githubusercontent.com/Mr-lidajun/Programming-Notes/master/Java/Socket网络编程进阶与实战/img/060102.png)
+
+### 6.1.3 服务器客户端模型
+![](https://raw.githubusercontent.com/Mr-lidajun/Programming-Notes/master/Java/Socket网络编程进阶与实战/img/060103.png)
+
+### 6.1.4 客户端服务器网络模型
+![](https://raw.githubusercontent.com/Mr-lidajun/Programming-Notes/master/Java/Socket网络编程进阶与实战/img/060104.png)
+
+## 6.2 聊天室消息接收实现
+### 6.2.1 客户端如何发送消息到客户端
+* 每个客户端都是服务器也是客户端？
+* 2个以上设备如何交互数据？
+* 客户端-服务器-转发到客户端
+![](https://raw.githubusercontent.com/Mr-lidajun/Programming-Notes/master/Java/Socket网络编程进阶与实战/img/060201.png)
+
+## 6.3 聊天室消息转发实现
+代码略
+
+## 6.4 服务器状态与测试用例构建-1
+### 6.4.1 服务器状态分析：服务器状态-繁忙
+* 每个客户端都需要服务器进行双通等待
+* 双通：客户端发送数据到服务器的接收通道
+* 双通：服务器回送消息的发送通道
+* 每条通道因为堵塞只能使用异步线程实现
+
+### 6.4.2 服务器线程数量
+* 一个客户端：双通->2条线程
+* n个客户端：2n条线程
+* 服务器实际线程数量：2n+
+
+## 6.5 服务器状态与测试用例构建-2
+创建测试类：ClientTest
+
+## 6.6 服务器性能总结与优化方案服务器性能分析与压测
+* 使用Home/bin目录下的性能分析工具：jvisualvm（还有一款工具jconsole）
+
+### 6.6.1 服务器性能数据分析
+* CPU：取决于数据的频繁性、数据的转发复杂性
+* 内存：取决于客户端的数量、客户端发送的数据大小
+* 线程：取决于连接的客户端的数量
+
+### 6.6.2 服务器优化方案分析
+* 减少线程数量
+* 增加线程执行繁忙状态
+* 客户端Buffer复用机制
