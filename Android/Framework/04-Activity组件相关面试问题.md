@@ -12,7 +12,7 @@
 
 ## 冷启动大致流程，通信过程
 
-![](https://raw.githubusercontent.com/Mr-lidajun/Programming-Notes/master/Android/Framework/img/040101.jpg)
+![](img/040101.jpg)
 
 <font color=red>创建Activity对象</font>
 
