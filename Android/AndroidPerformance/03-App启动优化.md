@@ -333,4 +333,4 @@ public void onCreate() {
 
 ### 启动器流程图
 
-​	略
+![](img/030901.png)
