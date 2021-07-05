@@ -61,6 +61,8 @@
 
 ## 4.2 JsonChao的性能优化专题博客
 
+> JsonChao CSDN博客地址：https://blog.csdn.net/qq_20798591
+
 * [深入探索Android稳定性优化](https://juejin.im/post/6844903972587716621#heading-104)
 * [深入探索Android卡顿优化（下）](https://juejin.im/post/6844904066259091469)
 

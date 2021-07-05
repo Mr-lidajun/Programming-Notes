@@ -1,0 +1,1 @@
+ffmpeg官网（http://ffmpeg.org/download.html#repositories）> Get packages & executable files > Windows builds from gyan.dev（https://www.gyan.dev/ffmpeg/builds/）> Mirror（https://www.gyan.dev/ffmpeg/builds/ffmpeg-git-github）
